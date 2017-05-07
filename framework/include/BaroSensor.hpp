@@ -36,9 +36,9 @@
 #include <stdint.h>
 #include "SyncObj.hpp"
 
-#if defined(__DF_OCPOC)
+//#if defined(__DF_OCPOC)
 #define __BARO_USE_SPI
-#endif
+//#endif
 
 #if defined(__BARO_USE_SPI)
 #include "SPIDevObj.hpp"
