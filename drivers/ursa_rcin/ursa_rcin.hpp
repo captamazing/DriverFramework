@@ -19,7 +19,6 @@ namespace DriverFramework
 #define RC_CLASS_PATH "/dev/rc_in"
 #define DRV_DF_DEVTYPE_RCIN 53
 
-
 class RC_IN : public DevObj
 {
 public:
