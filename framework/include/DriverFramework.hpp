@@ -85,10 +85,10 @@ class Framework
 public:
 	// Initialize the driver framework
 	// This function must be called before any of the functions below
-	static int initialize();
+	static int initialize(void);
 
 	// Terminate the driver framework
-	static void shutdown();
+	static void shutdown(void);
 
 	// Block until shutdown requested
 	static void waitForShutdown();

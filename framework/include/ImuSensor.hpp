@@ -59,8 +59,8 @@
 
 #if defined(__DF_RPI)
 #include <linux/spi/spidev.h>
-#define IMU_DEVICE_ACC_GYRO "/dev/spidev0.3"
-#define IMU_DEVICE_MAG "/dev/spidev0.2"
+#define IMU_DEVICE_ACC_GYRO "/dev/spidev0.1"
+#define IMU_DEVICE_MAG "/dev/spidev0.1"
 #elif defined(__DF_RPI_SINGLE)
 #define IMU_DEVICE_ACC_GYRO "/dev/spidev0.1"
 #define IMU_DEVICE_MAG "/dev/spidev0.1"

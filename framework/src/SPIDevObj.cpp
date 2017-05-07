@@ -282,7 +282,7 @@ int SPIDevObj::_modifyReg(uint8_t address, uint8_t clearbits, uint8_t setbits)
 
 int SPIDevObj::_transfer(uint8_t *write_buffer, uint8_t *read_buffer, uint8_t len)
 {
-#if defined(__DF_OCPOC)
+#if defined(__DF_RPI) || defined(__DF_EDISON) || defined(__DF_BEBOP) || defined(__DF_OCPOC)
 	struct spi_ioc_transfer spi_transfer; // datastructures for linux spi interface
 	memset(&spi_transfer, 0, sizeof(spi_ioc_transfer));
 
