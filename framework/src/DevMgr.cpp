@@ -93,6 +93,15 @@ void DevMgr::finalize()
 	g_lock_dev_mgr->lock();
 	m_initialized = false;
 
+	//Call 'stop' on each driver
+	DFPointerList::Index idx = nullptr;
+	idx = g_driver_list.next(idx);
+	while (idx != nullptr) {
+		DevObj *list_obj = reinterpret_cast<DevObj *>(g_driver_list.get(idx));
+		list_obj->stop();
+		idx = g_driver_list.next(idx);
+	}
+
 	g_driver_list.clear();
 
 	g_wait_list.clear();

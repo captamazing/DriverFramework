@@ -124,7 +124,7 @@ public:
 
 protected:
 	void _measure();
-	virtual int _process_rc_pulse();
+	virtual int _process_rc_pulse(uint16_t width_usec);
 	int devRead(void *buf, size_t count);
 	SyncObj 			m_synchronize;
 

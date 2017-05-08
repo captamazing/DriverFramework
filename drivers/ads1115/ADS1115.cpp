@@ -60,7 +60,7 @@ int ADS1115::start()
 		goto exit;
 	}
 
-	/* Initialize the pressure sensor.*/
+	/* Initialize the ADC */
 	result = ads1115_init();
 
 	if (result != 0) {

@@ -259,6 +259,7 @@ void RC_IN::init_dma_cb(dma_cb_t **cbp, uint32_t mode, uint32_t source, uint32_t
 
 bool RC_IN::stop_dma()
 {
+	DF_LOG_INFO("Turning off DMA for RC");
     dma_reg[RCIN_RPI_DMA_CS | RCIN_RPI_DMA_CHANNEL << 8] = 0;
     return true;
 }
@@ -401,7 +402,7 @@ void RC_IN::set_sigaction()
             sigaction(i, &sa, nullptr);
         }
     }
-    //px4_register_shutdown_hook(RC_IN::stop_dma); MAYBE NEEDED?
+    px4_register_shutdown_hook(RC_IN::stop_dma);
 }
 
 //Initializing necessary registers
@@ -414,12 +415,34 @@ void RC_IN::init_registers()
 
 int RC_IN::start()
 {
-	rc_in_init();
-	return 0;
+	/* Initialize the pressure sensor.*/
+	int result = rc_in_init();
+
+	if (result != 0) {
+		DF_LOG_ERR("error: RC Rx init failed, sensor read thread not started");
+		goto exit;
+	}
+
+	result = DevObj::start();
+
+	if (result != 0) {
+		DF_LOG_ERR("error: could not start DevObj for RC Rx");
+		goto exit;
+	}
+
+exit:
+
+	return result;
 }
 
 int RC_IN::stop()
 {
+	int result = DevObj::stop();
+
+	if (result != 0) {
+		DF_LOG_ERR("DevObj stop failed for RC dev obj");
+		return result;
+	}
 	stop_dma();
 	return 0;
 }
@@ -483,7 +506,7 @@ void RC_IN::_measure()
                 if (curr_signal == 1) {
                     width_s1 = (uint16_t)delta_time;
                     state = RCIN_RPI_ZERO_STATE;
-                    _process_rc_pulse();
+                    _process_rc_pulse(width_s0+width_s1);
                 }
                 break;
             }
@@ -503,9 +526,6 @@ int RC_IN::devRead(void *buf, size_t count)
 	return 0;
 }
 
-int RC_IN::_process_rc_pulse(){
-	DF_LOG_INFO("0 pulse: %d", width_s0);
-	DF_LOG_INFO("1 pulse: %d", width_s1);
-
+int RC_IN::_process_rc_pulse(uint16_t width_usec){
 	return -1;
 }
