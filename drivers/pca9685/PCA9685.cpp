@@ -83,10 +83,9 @@ void PCA9685::push() {
         *d++ = 0;
         *d++ = 0;
         *d++ = length & 0xFF;
-        *d++ = length >> 8;
+        *d++ = length >> 8; 
     }
 
-    //is kernel will care i2c lock?
     _writeReg(PCA9685_RA_LED0_ON_L + 4 * (PCA9685_CHAN_OFFSET + min_ch),
               &data[min_ch * 4], (max_ch - min_ch) * 4);
 
