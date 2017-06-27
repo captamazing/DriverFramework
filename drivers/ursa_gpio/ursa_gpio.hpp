@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include "DevObj.hpp"
 #include <signal.h>
 #include <pthread.h>
@@ -35,8 +37,9 @@ namespace DriverFramework
 #define BLOCK_SIZE          (4*1024)
 
 #define GPIO_PIN_COUNT 32
-#define GPIO_SAMPLE_FREQ     500
+#define GPIO_SAMPLE_FREQ 500
 #define GPIO_CALLBACK_HIGHTIME 1
+#define GPIO_CALLBACK_TOTALTIME 2
 #define GPIO_MEASURE_INTERVAL_US 1000000.0f/GPIO_SAMPLE_FREQ
 #define GPIO_DEV_PATH "/dev/gpio_timed"
 #define GPIO_PAGEMAP "/proc/self/pagemap"
@@ -51,7 +54,7 @@ enum state_t{
 
 //Callback registration struct
 typedef struct {
-    void * callback;
+    std::function<void(uint32_t)> callback;
     uint32_t pin;
     uint32_t type;
 } gpio_callback_t;
@@ -108,12 +111,11 @@ public:
 		DevObj("URSA_GPIO_TIMED", GPIO_DEV_PATH, GPIO_CLASS_PATH, DeviceBusType_UNKNOWN, GPIO_MEASURE_INTERVAL_US),
         circle_buffer{nullptr},
 	    con_blocks{nullptr},
-	    prev_tick(0),
+	    curr_tick(0),
 	    delta_time(0),
 	    curr_tick_inc(1000/GPIO_SAMPLE_FREQ),
 	    curr_pointer(0),
 	    curr_channel(0),
-	    width_s0(0),
 	    curr_signal(0),
 	    last_signal(228)
 	{
@@ -154,15 +156,12 @@ protected:
     Memory_table *con_blocks;
 
     uint64_t last_high_tick;
-    uint64_t prev_tick;
+    uint64_t curr_tick;
     uint64_t delta_time;
 
     uint32_t curr_tick_inc;
     uint32_t curr_pointer;
     uint32_t curr_channel;
-
-    uint16_t width_s0;
-    uint16_t width_s1;
 
     uint32_t curr_signal;
     uint32_t last_signal;
@@ -170,7 +169,13 @@ protected:
     uint32_t bitmask;
 
     uint32_t state;
-    void* highTimeCB[GPIO_PIN_COUNT];
+    //void (*highTimeCB[GPIO_PIN_COUNT])(uint32_t);
+    //void (*totalTimeCB[GPIO_PIN_COUNT])(uint32_t);
+    std::function<void(uint32_t)> highTimeCB[GPIO_PIN_COUNT];
+    std::function<void(uint32_t)> totalTimeCB[GPIO_PIN_COUNT];
+    uint64_t last_change[GPIO_PIN_COUNT];
+    uint16_t width_s0[GPIO_PIN_COUNT];
+    uint16_t width_s1[GPIO_PIN_COUNT];
 
     bool _initialized = false;
 

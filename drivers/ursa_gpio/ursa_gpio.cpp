@@ -30,7 +30,7 @@ using namespace DriverFramework;
 //Parameters
 #define GPIO_RPI_BUFFER_LENGTH   8
 #define GPIO_RPI_DMA_CHANNEL     0
-#define GPIO_RPI_MAX_COUNTER     1300
+#define GPIO_RPI_MAX_COUNTER     5200
 //#define PPM_INPUT_RPI 4
 #define GPIO_RPI_MAX_SIZE_LINE   50
 
@@ -201,8 +201,9 @@ int GPIO_TIMED::gpio_timed_init()
 	dma_base = GPIO_RPI_RPI2_DMA_BASE;
     clk_base = GPIO_RPI_RPI2_CLK_BASE;
     pcm_base = GPIO_RPI_RPI2_PCM_BASE;
-	circle_buffer = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 2, 2);
-    con_blocks = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 113, 2);
+    //See below for explanation of 8 and 125 as 'magic numbers'
+	circle_buffer = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 8, 2);
+    con_blocks = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 125, 2);
 
     init_registers();
 
@@ -214,19 +215,21 @@ int GPIO_TIMED::gpio_timed_init()
 
     usleep(100);
 
-    // Init callbacks and pin states for GPIO
-    for (int i=0;i<GPIO_PIN_COUNT;i++){
-        state[i]=GPIO_RPI_INITIAL_STATE;
-        highTimeCB[i]=nullptr;
-    }
-
     // Reading first sample
     curr_tick = *((uint64_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer));
-    prev_tick = curr_tick;
     curr_pointer += 8;
-    curr_signal = *((uint8_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer)) & 0x10 ? 1 : 0;
+    curr_signal = *((uint32_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer));
     last_signal = curr_signal;
-    curr_pointer++;
+    curr_pointer += 4;
+
+    // Init callbacks and pin states for GPIO
+    for (int i=0;i<GPIO_PIN_COUNT;i++){
+        highTimeCB[i]=nullptr;
+        width_s1[i]=0;
+        width_s0[i]=0;
+        last_change[i]=curr_tick;
+    }
+    state=0x00;
 
     _initialized = true;
 
@@ -288,23 +291,21 @@ void GPIO_TIMED::init_ctrl_data()
     phys_fifo_addr = ((pcm_base + 0x04) & 0x00FFFFFF) | 0x7e000000;
 
     // Init dma control blocks.
-    /*We are transferring 1 byte of GPIO register. Every 14th iteration we are 
-      sampling TIMER register, which length is 8 bytes. So, for every 14 samples of GPIO we need 
-      14 * 4 + 8 = 64 bytes of buffer. Value 14 was selected specially to have a 64-byte "block" 
-      TIMER - GPIO. So, we have integer count of such "blocks" at one virtual page. (4096 / 64 = 64 
-      "blocks" per page. As minimum, we must have 2 virtual pages of buffer (to have integer count of 
-      vitual pages for control blocks): for every 14 iterations (64 bytes of buffer) we need 14 control blocks for GPIO
-      sampling, 14 control blocks for setting frequency and 1 control block for sampling timer, so,
-      we need 14 + 14 + 1 = 29 control blocks. For integer value, we need 29 pages of control blocks.
-      Each control block length is 32 bytes. In 29 pages we will have (29 * 4096 / 32) = 29 * 128 control
-      blocks. 29 * 128 control blocks = 64 * 128 bytes of buffer = 2 pages of buffer.
-      So, for 14 * 64 * 2 iteration we init DMA for sampling GPIO
-      and timer to (64 * 64 * 2) = 8192 bytes = 2 pages of buffer.
+    /*We are transferring 1 byte of GPIO register. Every 62nd iteration we are 
+      sampling TIMER register, which length is 8 bytes. So, for every 62 samples of GPIO we need 
+      62 * 4 + 8 = 256 bytes of buffer. Value 62 was selected specially to have a 256-byte "block" 
+      TIMER - GPIO. So, we have integer count of such "blocks" at one virtual page. (4096 / 256 = 16 
+      "blocks" per page. As minimum, we must have 8 virtual pages of buffer (to have integer count of 
+      virtual pages for control blocks): for every 62 iterations (256 bytes of buffer) we need 62 control blocks for GPIO
+      sampling, 62 control blocks for setting frequency and 1 control block for sampling timer, so,
+      we need 62 + 62 + 1 = 125 control blocks. For integer value, we need 125 pages of control blocks.
+      Each control block length is 32 bytes. In 125 pages we will have (125 * 4096 / 32) = 125 * 128 control
+      blocks. 125 * 128 control blocks = 256 * 128 bytes of buffer = 8 pages of buffer.
     */
 
-    for (uint32_t i = 0; i < 14 * 128 * GPIO_RPI_BUFFER_LENGTH; i++) {
-        //Transfer timer every 14th sample
-        if (i % 14 == 0) {
+    for (uint32_t i = 0; i < 62 * 128 * GPIO_RPI_BUFFER_LENGTH; i++) {
+        //Transfer timer every 62nd sample
+        if (i % 62 == 0) {
             cbp_curr = (dma_cb_t *)con_blocks->get_page(con_blocks->_virt_pages, cbp);
 
             init_dma_cb(&cbp_curr, GPIO_RPI_DMA_NO_WIDE_BURSTS | GPIO_RPI_DMA_WAIT_RESP | GPIO_RPI_DMA_DEST_INC | GPIO_RPI_DMA_SGPIO_TIMEDC, GPIO_RPI_TIMER_BASE,
@@ -449,7 +450,7 @@ void GPIO_TIMED::_measure(){
     }
 
     // Now we are getting address in which DMAC is writing at current moment
-    dma_cb_t *ad = (dma_cb_t *)con_blocks->get_virt_addr(dma_reg[RCIN_RPI_DMA_CONBLK_AD | RCIN_RPI_DMA_CHANNEL << 8]);
+    dma_cb_t *ad = (dma_cb_t *)con_blocks->get_virt_addr(dma_reg[GPIO_RPI_DMA_CONBLK_AD | GPIO_RPI_DMA_CHANNEL << 8]);
     for (int j = 1; j >= -1; j--) {
         void *x = circle_buffer->get_virt_addr((ad + j)->dst);
         if (x != nullptr) {
@@ -465,53 +466,42 @@ void GPIO_TIMED::_measure(){
 
     // How many bytes have DMA transferred (and we can process)?
     // We can't stay in method for a long time, because it may lead to delays
-    if (counter > RCIN_RPI_MAX_COUNTER) {
-        counter = RCIN_RPI_MAX_COUNTER;
+    if (counter > GPIO_RPI_MAX_COUNTER) {
+        counter = GPIO_RPI_MAX_COUNTER;
     }
-
-    // Processing ready bytes
-    for (; counter > 0x40; counter--) {
+    // Processing ready bytes (need at least 64)
+    while (counter > 0x100) {
         // Is it timer sample?
-        if (curr_pointer % (64) == 0) {
+        if (curr_pointer % (256) == 0) {
             curr_tick = *((uint64_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer));
             curr_pointer += 8;
             counter -= 8;
         }
 
+        // GPIO sample
         curr_signal = *((uint32_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer));
-        uint32_t diff_signal = curr_signal^last_signal;
+        diff_signal = curr_signal^last_signal;
         for (int i=0; i<GPIO_PIN_COUNT;i++){
-            if (highTimeCB[callbackStruct->pin]==nullptr) continue; //Don't waste time on pins with no callbacks registered
-            bitmask=0x01<<i; //Bitmask for this pin
-            // If the signal changed
-            if (diff_signal & bitmask) {
-// TO DO - 26 JUNE
-// CONTINUE HERE
-                delta_time = curr_tick - prev_tick;
-                prev_tick = curr_tick;
-                switch (state) {
-                case RCIN_RPI_INITIAL_STATE:
-                    state = RCIN_RPI_ZERO_STATE;
-                    break;
-                case RCIN_RPI_ZERO_STATE:
-                    if (curr_signal == 0) {
-                        width_s0 = (uint16_t)delta_time;
-                        state = RCIN_RPI_ONE_STATE;
-                    }
-                    break;
-                case RCIN_RPI_ONE_STATE:
-                    if (curr_signal == 1) {
-                        width_s1 = (uint16_t)delta_time;
-                        state = RCIN_RPI_ZERO_STATE;
-                    }
-                    break;
-                }
+            if (highTimeCB[i]==nullptr && totalTimeCB[i]==nullptr){
+                continue; //Don't waste time on pins with no callbacks registered
             }
-
-            
+            bitmask=0x01<<i; //Bitmask for this pin
+            // If the signal changed...
+            if (diff_signal & bitmask) {
+                delta_time=curr_tick-last_change[i];
+                last_change[i]=curr_tick;
+                if (curr_signal & bitmask){ //Changed to a 1
+                    width_s0[i] = (uint16_t)delta_time;
+                } else { //Changed to a 0
+                    width_s1[i] = (uint16_t)delta_time;
+                    if (highTimeCB[i]!=nullptr) highTimeCB[i](delta_time);
+                    if (totalTimeCB[i]!=nullptr) totalTimeCB[i]((uint64_t)(width_s1[i]+width_s0[i]));
+                }
+            }            
         }
-        last_signal = curr_signal;
-        curr_pointer+=4;
+        last_signal=curr_signal;
+        counter -= 4;
+        curr_pointer += 4;
         if (curr_pointer >= circle_buffer->get_page_count() * PAGE_SIZE) {
             curr_pointer = 0;
         }
@@ -533,8 +523,6 @@ int GPIO_TIMED::stop()
 
 int GPIO_TIMED::devRead(void *buf, size_t count)
 {	
-    buf = 
-
 	DF_LOG_INFO("READING GPIO");
     return 0;
 }
@@ -544,5 +532,8 @@ int GPIO_TIMED::devWrite(const void *buf, size_t count){
     callbackStruct=(gpio_callback_t*) buf;
     if (callbackStruct->type==GPIO_CALLBACK_HIGHTIME){
         highTimeCB[callbackStruct->pin]=callbackStruct->callback;
+    } else if (callbackStruct->type==GPIO_CALLBACK_TOTALTIME){
+        totalTimeCB[callbackStruct->pin]=callbackStruct->callback;
     }
+    return 1;
 }
