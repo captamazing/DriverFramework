@@ -74,7 +74,7 @@ public:
 	void shutdown();
 	void enableStats(bool enable);
 
-	static void *process_trampoline(void *);
+	static void *process_trampoline(void * /*arg*/);
 
 private:
 	HRTWorkQueue() = default;
@@ -116,9 +116,7 @@ static SyncObj *g_framework;
 
 static uint64_t TsToAbstime(struct timespec *ts)
 {
-	uint64_t result;
-
-	result = (uint64_t)(ts->tv_sec) * 1000000;
+	uint64_t result = (uint64_t)(ts->tv_sec) * 1000000UL;
 	result += ts->tv_nsec / 1000;
 
 	return result;
