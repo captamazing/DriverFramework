@@ -28,9 +28,9 @@
 using namespace DriverFramework;
 
 //Parameters
-#define GPIO_RPI_BUFFER_LENGTH   8
+#define GPIO_RPI_BUFFER_LENGTH   80
 #define GPIO_RPI_DMA_CHANNEL     0
-#define GPIO_RPI_MAX_COUNTER     5200
+#define GPIO_RPI_MAX_COUNTER     52000
 //#define PPM_INPUT_RPI 4
 #define GPIO_RPI_MAX_SIZE_LINE   50
 
@@ -294,6 +294,7 @@ void GPIO_TIMED::init_ctrl_data()
       we need 62 + 62 + 1 = 125 control blocks. For integer value, we need 125 pages of control blocks.
       Each control block length is 32 bytes. In 125 pages we will have (125 * 4096 / 32) = 125 * 128 control
       blocks. 125 * 128 control blocks = 256 * 128 bytes of buffer = 8 pages of buffer.
+
     */
 
     for (uint32_t i = 0; i < 62 * 128 * GPIO_RPI_BUFFER_LENGTH; i++) {
@@ -353,7 +354,7 @@ void GPIO_TIMED::init_PCM()
     usleep(100);
     clk_reg[GPIO_RPI_PCMCLK_CNTL] = 0x5A000006;                              // Source=PLLD (500MHz)
     usleep(100);
-    clk_reg[GPIO_RPI_PCMCLK_DIV] = 0x5A000000 | ((50000/GPIO_SAMPLE_FREQ)<<12);   // Set pcm div. If we need to configure DMA frequency.
+    clk_reg[GPIO_RPI_PCMCLK_DIV] = 0x5A000000 | ((500000000/GPIO_SAMPLE_FREQ)<<12);   // Set pcm div. If we need to configure DMA frequency.
     usleep(100);
     clk_reg[GPIO_RPI_PCMCLK_CNTL] = 0x5A000016;                              // Source=PLLD and enable
     usleep(100);

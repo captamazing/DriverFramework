@@ -37,10 +37,11 @@ namespace DriverFramework
 #define BLOCK_SIZE          (4*1024)
 
 #define GPIO_PIN_COUNT 32
-#define GPIO_SAMPLE_FREQ 500
+#define GPIO_SAMPLE_FREQ 1000000
+#define GPIO_MEASURE_FREQ 500
 #define GPIO_CALLBACK_HIGHTIME 1
 #define GPIO_CALLBACK_TOTALTIME 2
-#define GPIO_MEASURE_INTERVAL_US 1000000.0f/GPIO_SAMPLE_FREQ
+#define GPIO_MEASURE_INTERVAL_US 1000000.0f/GPIO_MEASURE_FREQ
 #define GPIO_DEV_PATH "/dev/gpio_timed"
 #define GPIO_PAGEMAP "/proc/self/pagemap"
 #define GPIO_CLASS_PATH "/dev/gpio_timed0"
@@ -113,7 +114,7 @@ public:
 	    con_blocks{nullptr},
 	    curr_tick(0),
 	    delta_time(0),
-	    curr_tick_inc(1000/GPIO_SAMPLE_FREQ),
+	    curr_tick_inc(1e6/GPIO_SAMPLE_FREQ),
 	    curr_pointer(0),
 	    curr_channel(0),
 	    curr_signal(0),
