@@ -28,11 +28,10 @@
 using namespace DriverFramework;
 
 //Parameters
-#define GPIO_RPI_BUFFER_LENGTH   80
+#define GPIO_RPI_BUFFER_LENGTH   8
 #define GPIO_RPI_DMA_CHANNEL     0
 #define GPIO_RPI_MAX_COUNTER     52000
 //#define PPM_INPUT_RPI 4
-#define GPIO_RPI_MAX_SIZE_LINE   50
 
 //Memory Addresses
 #define GPIO_RPI_RPI1_DMA_BASE 0x20007000
@@ -339,6 +338,7 @@ void GPIO_TIMED::init_ctrl_data()
 
         cbp += sizeof(dma_cb_t);
     }
+    DF_LOG_INFO("DEST: %d",dest);
     //Make last control block point to the first (to make circle)
     cbp -= sizeof(dma_cb_t);
     ((dma_cb_t *)con_blocks->get_page(con_blocks->_virt_pages, cbp))->next = (uintptr_t)con_blocks->get_page(con_blocks->_phys_pages, 0);
@@ -354,7 +354,7 @@ void GPIO_TIMED::init_PCM()
     usleep(100);
     clk_reg[GPIO_RPI_PCMCLK_CNTL] = 0x5A000006;                              // Source=PLLD (500MHz)
     usleep(100);
-    clk_reg[GPIO_RPI_PCMCLK_DIV] = 0x5A000000 | ((500000000/GPIO_SAMPLE_FREQ)<<12);   // Set pcm div. If we need to configure DMA frequency.
+    clk_reg[GPIO_RPI_PCMCLK_DIV] = 0x5A000000 | ((50000000/(GPIO_SAMPLE_FREQ)& 0xfff)<<12);   // Set pcm div. If we need to configure DMA frequency.
     usleep(100);
     clk_reg[GPIO_RPI_PCMCLK_CNTL] = 0x5A000016;                              // Source=PLLD and enable
     usleep(100);
@@ -438,13 +438,15 @@ void GPIO_TIMED::_measure(){
         return;
     }
 
+    //DF_LOG_INFO("BYTES AVAILABLE: %d",counter);
+
     // How many bytes have DMA transferred (and we can process)?
     // We can't stay in method for a long time, because it may lead to delays
     if (counter > GPIO_RPI_MAX_COUNTER) {
         counter = GPIO_RPI_MAX_COUNTER;
     }
-    // Processing ready bytes (need at least 64)
-    while (counter > 0x100) {
+    // Processing ready bytes (need at least 256)
+    while (counter > 0x200) {
         // Is it timer sample?
         if (curr_pointer % (256) == 0) {
             curr_tick = *((uint64_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer));
@@ -477,6 +479,7 @@ void GPIO_TIMED::_measure(){
         counter -= 4;
         curr_pointer += 4;
         if (curr_pointer >= circle_buffer->get_page_count() * PAGE_SIZE) {
+            //DF_LOG_INFO("Reset pointer. curr_pointer: %d, max: %d",curr_pointer,circle_buffer->get_page_count() * PAGE_SIZE);
             curr_pointer = 0;
         }
         curr_tick += curr_tick_inc;
