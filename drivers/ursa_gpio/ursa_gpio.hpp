@@ -186,9 +186,7 @@ protected:
     void init_PCM();
     void init_DMA();
     void init_buffer();
-    static bool stop_dma();
-    static void termination_handler(int signum);
-    void set_sigaction();
+    bool stop_dma();
 };
 
 }; // namespace DriverFramework

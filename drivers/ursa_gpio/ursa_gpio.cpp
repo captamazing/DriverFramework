@@ -208,7 +208,6 @@ int GPIO_TIMED::gpio_timed_init()
     init_registers();
 
     // Configuration
-    set_sigaction();
     init_ctrl_data();
     init_PCM();
     init_DMA();
@@ -271,12 +270,6 @@ bool GPIO_TIMED::stop_dma()
 	DF_LOG_INFO("Turning off DMA for GPIO");
     dma_reg[GPIO_RPI_DMA_CS | GPIO_RPI_DMA_CHANNEL << 8] = 0;
     return true;
-}
-
-/* We need to be sure that the DMA is stopped upon termination */
-void GPIO_TIMED::termination_handler(int signum)
-{
-    stop_dma();
 }
 
 // This function is used to init DMA control blocks (setting sampling GPIO
@@ -390,26 +383,6 @@ void GPIO_TIMED::init_DMA()
     dma_reg[GPIO_RPI_DMA_CONBLK_AD | GPIO_RPI_DMA_CHANNEL << 8] = reinterpret_cast<uintptr_t>(con_blocks->get_page(con_blocks->_phys_pages, 0));//Set first control block address
     dma_reg[GPIO_RPI_DMA_DEBUG | GPIO_RPI_DMA_CHANNEL << 8] = 7;                      // clear debug error flags
     dma_reg[GPIO_RPI_DMA_CS | GPIO_RPI_DMA_CHANNEL << 8] = 0x10880001;                // go, mid priority, wait for outstanding writes    
-}
-
-
-// We must stop DMA when the process is killed
-void GPIO_TIMED::set_sigaction()
-{
-    for (int i = 0; i < NSIG; i++) {
-        // catch all signals to ensure DMA is disabled - some of them may
-        // already be handled elsewhere in cases we consider normal
-        // termination. In those cases the teardown() method must be called.
-        struct sigaction sa, sa_old;
-        memset(&sa, 0, sizeof(sa));
-        sigaction(i, nullptr, &sa_old);
-
-        if (sa_old.sa_handler == nullptr) {
-            sa.sa_handler = GPIO_TIMED::termination_handler;
-            sigaction(i, &sa, nullptr);
-        }
-    }
-    px4_register_shutdown_hook(GPIO_TIMED::stop_dma);
 }
 
 //Initializing necessary registers
