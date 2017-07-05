@@ -201,8 +201,8 @@ int GPIO_TIMED::gpio_timed_init()
     clk_base = GPIO_RPI_RPI2_CLK_BASE;
     pcm_base = GPIO_RPI_RPI2_PCM_BASE;
     //See below for explanation of 8 and 125 as 'magic numbers'
-	circle_buffer = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 8, 2);
-    con_blocks = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 125, 2);
+	circle_buffer = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 1, 2);
+    con_blocks = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 10, 2);
 
     init_registers();
 
@@ -279,26 +279,28 @@ void GPIO_TIMED::init_ctrl_data()
     uint32_t dest = 0;
     uint32_t cbp = 0;
     dma_cb_t *cbp_curr;
-    // Set fifo addr (for delay)
+    // Set PCM fifo addr (for delay)
     phys_fifo_addr = ((pcm_base + 0x04) & 0x00FFFFFF) | 0x7e000000;
 
     // Init dma control blocks.
-    /*We are transferring 1 byte of GPIO register. Every 62nd iteration we are 
-      sampling TIMER register, which length is 8 bytes. So, for every 62 samples of GPIO we need 
-      62 * 4 + 8 = 256 bytes of buffer. Value 62 was selected specially to have a 256-byte "block" 
-      TIMER - GPIO. So, we have integer count of such "blocks" at one virtual page. (4096 / 256 = 16 
-      "blocks" per page. As minimum, we must have 8 virtual pages of buffer (to have integer count of 
-      virtual pages for control blocks): for every 62 iterations (256 bytes of buffer) we need 62 control blocks for GPIO
-      sampling, 62 control blocks for setting frequency and 1 control block for sampling timer, so,
-      we need 62 + 62 + 1 = 125 control blocks. For integer value, we need 125 pages of control blocks.
-      Each control block length is 32 bytes. In 125 pages we will have (125 * 4096 / 32) = 125 * 128 control
-      blocks. 125 * 128 control blocks = 256 * 128 bytes of buffer = 8 pages of buffer.
+    /*We are transferring 1 byte of GPIO register. Every 2nd iteration we are 
+      sampling TIMER register, which length is 8 bytes. So, for every 2 samples of GPIO we need 
+      2 * 4 + 8 = 16 bytes of buffer. Value 2 was selected specially to have a 16-byte "block" 
+      TIMERx1 - GPIOx2. So, we have integer count of such "blocks" at one virtual page. (4096 / 16 = 256 
+      "blocks" per page). 
 
+      As minimum, we must have 1 virtual page of buffer (to have integer count of 
+      virtual pages for control blocks): 
+      - For every 2 GPIO samples (16 bytes of buffer) we need 2 control blocks for GPIO
+        sampling, 2 control blocks for setting frequency and 1 control block for sampling timer
+      - So, we need 2 + 2 + 1 = 5 control blocks. For integer value, we need 10 pages of control blocks.
+      - Each control block length is 32 bytes. In 10 pages we will have (10 * 4096 / 32) = 10 * 128 control blocks. 
+      10 * 128 control blocks = 2 * 128 * 16  bytes of buffer = 1 page of buffer.
     */
 
-    for (uint32_t i = 0; i < 62 * 128 * GPIO_RPI_BUFFER_LENGTH; i++) {
-        //Transfer timer every 62nd sample
-        if (i % 62 == 0) {
+    for (uint32_t i = 0; i < 2 * 2 * 128 * GPIO_RPI_BUFFER_LENGTH; i++) {
+        //Transfer timer every 2nd sample
+        if (i % 2 == 0) {
             cbp_curr = (dma_cb_t *)con_blocks->get_page(con_blocks->_virt_pages, cbp);
 
             init_dma_cb(&cbp_curr, GPIO_RPI_DMA_NO_WIDE_BURSTS | GPIO_RPI_DMA_WAIT_RESP | GPIO_RPI_DMA_DEST_INC | GPIO_RPI_DMA_SGPIO_TIMEDC, GPIO_RPI_TIMER_BASE,
@@ -325,7 +327,7 @@ void GPIO_TIMED::init_ctrl_data()
         cbp += sizeof(dma_cb_t);
 
         // Delay (for setting sampling frequency)
-        /* DMA is waiting data request signal (DREQ) from PCM. PCM is set for 1 MhZ freqency, so,
+        /* DMA is waiting data request signal (DREQ) from PCM. PCM is set for a certain freqency, so,
 	       each sample of GPIO is limited by writing to PCA queue.
 	    */
         cbp_curr = (dma_cb_t *)con_blocks->get_page(con_blocks->_virt_pages, cbp);
@@ -338,7 +340,6 @@ void GPIO_TIMED::init_ctrl_data()
 
         cbp += sizeof(dma_cb_t);
     }
-    DF_LOG_INFO("DEST: %d",dest);
     //Make last control block point to the first (to make circle)
     cbp -= sizeof(dma_cb_t);
     ((dma_cb_t *)con_blocks->get_page(con_blocks->_virt_pages, cbp))->next = (uintptr_t)con_blocks->get_page(con_blocks->_phys_pages, 0);
@@ -423,8 +424,10 @@ void GPIO_TIMED::_measure(){
         return;
     }
 
+    DF_LOG_INFO("GET ADD");
     // Now we are getting address in which DMAC is writing at current moment
     dma_cb_t *ad = (dma_cb_t *)con_blocks->get_virt_addr(dma_reg[GPIO_RPI_DMA_CONBLK_AD | GPIO_RPI_DMA_CHANNEL << 8]);
+    DF_LOG_INFO("GET ADD2");
     for (int j = 1; j >= -1; j--) {
         void *x = circle_buffer->get_virt_addr((ad + j)->dst);
         if (x != nullptr) {
@@ -433,22 +436,23 @@ void GPIO_TIMED::_measure(){
             break;
         }
     }
+    DF_LOG_INFO("GET ADD3");
 
     if (counter == 0) {
         return;
     }
 
-    //DF_LOG_INFO("BYTES AVAILABLE: %d",counter);
+    DF_LOG_INFO("BYTES AVAILABLE: %d",counter);
 
     // How many bytes have DMA transferred (and we can process)?
     // We can't stay in method for a long time, because it may lead to delays
     if (counter > GPIO_RPI_MAX_COUNTER) {
         counter = GPIO_RPI_MAX_COUNTER;
     }
-    // Processing ready bytes (need at least 256)
-    while (counter > 0x200) {
+    // Processing ready bytes (need at least 16)
+    while (counter > 0x010) {
         // Is it timer sample?
-        if (curr_pointer % (256) == 0) {
+        if (curr_pointer % (2) == 0) {
             curr_tick = *((uint64_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer));
             curr_pointer += 8;
             counter -= 8;
