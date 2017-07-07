@@ -30,6 +30,8 @@
 #include <assert.h>
 #include <queue>
 
+#include "../pigpio/pigpio.h"
+
 namespace DriverFramework
 {
 
@@ -37,8 +39,8 @@ namespace DriverFramework
 #define BLOCK_SIZE          (4*1024)
 
 #define GPIO_PIN_COUNT 32
-#define GPIO_SAMPLE_FREQ 500000
-#define GPIO_MEASURE_FREQ 500
+#define GPIO_SAMPLE_FREQ 5000000
+#define GPIO_MEASURE_FREQ 5000
 #define GPIO_CALLBACK_HIGHTIME 1
 #define GPIO_CALLBACK_TOTALTIME 2
 #define GPIO_MEASURE_INTERVAL_US 1000000/GPIO_MEASURE_FREQ

@@ -20,7 +20,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include <px4_shutdown.h>
+
 
 #include "DriverFramework.hpp"
 #include "ursa_gpio.hpp"
@@ -28,7 +28,7 @@
 using namespace DriverFramework;
 
 //Parameters
-#define GPIO_RPI_BUFFER_LENGTH   8
+#define GPIO_RPI_BUFFER_LENGTH   500
 #define GPIO_RPI_DMA_CHANNEL     0
 #define GPIO_RPI_MAX_COUNTER     52000
 //#define PPM_INPUT_RPI 4
@@ -197,10 +197,23 @@ uint32_t Memory_table::get_page_count() const
 //**************
 int GPIO_TIMED::gpio_timed_init()
 {
+    gpioCfgInterfaces(PI_DISABLE_FIFO_IF | PI_DISABLE_SOCK_IF);
+    gpioCfgMemAlloc(0);
+    int i = gpioInitialise();
+    if (i<0){
+        DF_LOG_INFO("Failed to initialise PIGPIO library");
+        return i;
+    } 
+
+    _initialized = true;
+    return 0;
+    //DF_LOG_INFO("Ver: %d",i);
+    //gpioInitialise();
+    /*
 	dma_base = GPIO_RPI_RPI2_DMA_BASE;
     clk_base = GPIO_RPI_RPI2_CLK_BASE;
     pcm_base = GPIO_RPI_RPI2_PCM_BASE;
-    //See below for explanation of 8 and 125 as 'magic numbers'
+    //See below for explanation of 1 and 10 as 'magic numbers'
 	circle_buffer = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 1, 2);
     con_blocks = new Memory_table(GPIO_RPI_BUFFER_LENGTH * 10, 2);
 
@@ -229,9 +242,9 @@ int GPIO_TIMED::gpio_timed_init()
     }
     state=0x00;
 
-    _initialized = true;
+    */
 
-	return 0;
+	
 }
 
 // Map peripheral to virtual memory
@@ -355,7 +368,7 @@ void GPIO_TIMED::init_PCM()
     usleep(100);
     clk_reg[GPIO_RPI_PCMCLK_CNTL] = 0x5A000006;                              // Source=PLLD (500MHz)
     usleep(100);
-    clk_reg[GPIO_RPI_PCMCLK_DIV] = 0x5A000000 | ((50000000/(GPIO_SAMPLE_FREQ)& 0xfff)<<12);   // Set pcm div. If we need to configure DMA frequency.
+    clk_reg[GPIO_RPI_PCMCLK_DIV] = 0x5A000000 | (( (500000000/GPIO_SAMPLE_FREQ)& 0xfff)<<12);   // Set pcm div. If we need to configure DMA frequency.
     usleep(100);
     clk_reg[GPIO_RPI_PCMCLK_CNTL] = 0x5A000016;                              // Source=PLLD and enable
     usleep(100);
@@ -418,16 +431,16 @@ exit:
 }
 
 void GPIO_TIMED::_measure(){
+
+    return;
     uint32_t counter = 0;
 
     if (!_initialized) {
         return;
     }
 
-    DF_LOG_INFO("GET ADD");
     // Now we are getting address in which DMAC is writing at current moment
     dma_cb_t *ad = (dma_cb_t *)con_blocks->get_virt_addr(dma_reg[GPIO_RPI_DMA_CONBLK_AD | GPIO_RPI_DMA_CHANNEL << 8]);
-    DF_LOG_INFO("GET ADD2");
     for (int j = 1; j >= -1; j--) {
         void *x = circle_buffer->get_virt_addr((ad + j)->dst);
         if (x != nullptr) {
@@ -436,13 +449,10 @@ void GPIO_TIMED::_measure(){
             break;
         }
     }
-    DF_LOG_INFO("GET ADD3");
 
     if (counter == 0) {
         return;
     }
-
-    DF_LOG_INFO("BYTES AVAILABLE: %d",counter);
 
     // How many bytes have DMA transferred (and we can process)?
     // We can't stay in method for a long time, because it may lead to delays
@@ -450,9 +460,9 @@ void GPIO_TIMED::_measure(){
         counter = GPIO_RPI_MAX_COUNTER;
     }
     // Processing ready bytes (need at least 16)
-    while (counter > 0x010) {
+    while (counter > 0x100) {
         // Is it timer sample?
-        if (curr_pointer % (2) == 0) {
+        if (curr_pointer % (16) == 0) {
             curr_tick = *((uint64_t *)circle_buffer->get_page(circle_buffer->_virt_pages, curr_pointer));
             curr_pointer += 8;
             counter -= 8;
@@ -498,7 +508,8 @@ int GPIO_TIMED::stop()
 		DF_LOG_ERR("DevObj stop failed for GPIO dev obj");
 		return result;
 	}
-	stop_dma();
+    gpioTerminate();
+	//stop_dma();
 	return 0;
 }
 
