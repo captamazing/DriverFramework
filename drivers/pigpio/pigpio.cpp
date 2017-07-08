@@ -28,8 +28,9 @@ For more information, please refer to <http://unlicense.org/>
 /* pigpio version 64 */
 
 /* include ------------------------------------------------------- */
-
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -61,9 +62,14 @@ For more information, please refer to <http://unlicense.org/>
 #include <fnmatch.h>
 #include <glob.h>
 
-#include "pigpio.h"
+#include "DriverFramework.hpp"
+#include "pigpio.hpp"
 
-#include "command.h"
+#include "command.hpp"
+
+namespace PIGPIO {
+
+using namespace DriverFramework;
 
 
 /* --------------------------------------------------------------- */
@@ -1301,30 +1307,30 @@ static int fdSock       = -1;
 static int fdPmap       = -1;
 static int fdMbox       = -1;
 
-static DMAMem_t *dmaMboxBlk = MAP_FAILED;
-static uintptr_t * * dmaPMapBlk = MAP_FAILED;
-static dmaPage_t * * dmaVirt = MAP_FAILED;
-static dmaPage_t * * dmaBus = MAP_FAILED;
+static DMAMem_t *dmaMboxBlk = (DMAMem_t *)MAP_FAILED;
+static uintptr_t * * dmaPMapBlk = (uintptr_t * *)MAP_FAILED;
+static dmaPage_t * * dmaVirt = (dmaPage_t * * )MAP_FAILED;
+static dmaPage_t * * dmaBus = (dmaPage_t * * )MAP_FAILED;
 
-static dmaIPage_t * * dmaIVirt = MAP_FAILED;
-static dmaIPage_t * * dmaIBus = MAP_FAILED;
+static dmaIPage_t * * dmaIVirt = (dmaIPage_t * *)MAP_FAILED;
+static dmaIPage_t * * dmaIBus = (dmaIPage_t * *)MAP_FAILED;
 
-static dmaOPage_t * * dmaOVirt = MAP_FAILED;
-static dmaOPage_t * * dmaOBus = MAP_FAILED;
+static dmaOPage_t * * dmaOVirt = (dmaOPage_t * *)MAP_FAILED;
+static dmaOPage_t * * dmaOBus = (dmaOPage_t * *)MAP_FAILED;
 
-static volatile uint32_t * auxReg  = MAP_FAILED;
-static volatile uint32_t * bscsReg = MAP_FAILED;
-static volatile uint32_t * clkReg  = MAP_FAILED;
-static volatile uint32_t * dmaReg  = MAP_FAILED;
-static volatile uint32_t * gpioReg = MAP_FAILED;
-static volatile uint32_t * padsReg = MAP_FAILED;
-static volatile uint32_t * pcmReg  = MAP_FAILED;
-static volatile uint32_t * pwmReg  = MAP_FAILED;
-static volatile uint32_t * spiReg  = MAP_FAILED;
-static volatile uint32_t * systReg = MAP_FAILED;
+static volatile uint32_t * auxReg  = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * bscsReg = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * clkReg  = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * dmaReg  = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * gpioReg = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * padsReg = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * pcmReg  = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * pwmReg  = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * spiReg  = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * systReg = (uint32_t *)MAP_FAILED;
 
-static volatile uint32_t * dmaIn   = MAP_FAILED;
-static volatile uint32_t * dmaOut  = MAP_FAILED;
+static volatile uint32_t * dmaIn   = (uint32_t *)MAP_FAILED;
+static volatile uint32_t * dmaOut  = (uint32_t *)MAP_FAILED;
 
 static uint32_t hw_clk_freq[3];
 static uint32_t hw_pwm_freq[2];
@@ -1550,7 +1556,7 @@ int myScriptNameValid(char *name)
 int myPathBad(char *name)
 {
    int i, c, len, in_part, parts, last_char_dot;
-   char *bad="/*?.";
+   const char *bad="/*?.";
 
    parts = 0;
    in_part = 0;
@@ -1691,7 +1697,7 @@ static uint32_t myGpioDelay(uint32_t micros)
 
 /* ----------------------------------------------------------------------- */
 
-static void myCreatePipe(char * name, int perm)
+static void myCreatePipe(const char * name, int perm)
 {
    unlink(name);
 
@@ -2686,7 +2692,7 @@ static void myGpioSetServo(unsigned gpio, int oldVal, int newVal)
 https://github.com/raspberrypi/firmware/wiki/Mailbox-property-interface
 */
 
-static int mbCreate(char *dev)
+static int mbCreate(const char *dev)
 {
    /* <0 error */
 
@@ -2834,7 +2840,7 @@ static int mbDMAAlloc(DMAMem_t *DMAMemP, unsigned size, uint32_t _pi_mem_flag)
       DMAMemP->bus_addr = mbLockMemory(fdMbox, DMAMemP->handle);
 
       DMAMemP->virtual_addr =
-         mbMapMem(BUS_TO_PHYS(DMAMemP->bus_addr), size);
+         (uintptr_t *)mbMapMem(BUS_TO_PHYS(DMAMemP->bus_addr), size);
 
       return 1;
    }
@@ -4801,7 +4807,7 @@ int spiXfer(unsigned handle, char *txBuf, char *rxBuf, unsigned count)
 int serOpen(char *tty, unsigned serBaud, unsigned serFlags)
 {
    static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-   struct termios new;
+   struct termios newTerm;
    int speed;
    int fd;
    int i, slot;
@@ -4865,18 +4871,18 @@ int serOpen(char *tty, unsigned serBaud, unsigned serFlags)
       return PI_SER_OPEN_FAILED;
    }
 
-   tcgetattr(fd, &new);
+   tcgetattr(fd, &newTerm);
 
-   cfmakeraw(&new);
+   cfmakeraw(&newTerm);
 
-   cfsetispeed(&new, speed);
-   cfsetospeed(&new, speed);
+   cfsetispeed(&newTerm, speed);
+   cfsetospeed(&newTerm, speed);
 
-   new.c_cc [VMIN]  = 0;
-   new.c_cc [VTIME] = 0;
+   newTerm.c_cc [VMIN]  = 0;
+   newTerm.c_cc [VTIME] = 0;
 
    tcflush(fd, TCIFLUSH);
-   tcsetattr(fd, TCSANOW, &new);
+   tcsetattr(fd, TCSANOW, &newTerm);
 
    //fcntl(fd, F_SETFL, O_RDWR);
 
@@ -6458,7 +6464,7 @@ static void *pthScript(void *x)
 
    S[0] = 0; /* to prevent compiler warning */
 
-   s = x;
+   s = (gpioScript_t *)x;
 
    while ((volatile int)s->request != PI_SCRIPT_DELETE)
    {
@@ -6681,7 +6687,7 @@ static void * pthTimerTick(void *x)
    gpioTimer_t *     tp;
    struct timespec   req, rem, period;
 
-   tp = x;
+   tp = (gpioTimer_t *)x;
 
    clock_gettime(CLOCK_REALTIME, &tp->nextTick);
 
@@ -7025,7 +7031,7 @@ static void * pthSocketThread(void *x)
 
       if (addrAllowed((struct sockaddr *)&client))
       {
-         sock = malloc(sizeof(int));
+         sock = (int *)malloc(sizeof(int));
 
          *sock = fdC;
 
@@ -7054,7 +7060,7 @@ static void initCheckLockFile(void)
    int count;
    int pid;
    int err;
-   int delete;
+   int deleted;
    char str[20];
 
    fd = open(PI_LOCKFILE, O_RDONLY);
@@ -7062,7 +7068,7 @@ static void initCheckLockFile(void)
    if (fd != -1)
    {
       DBG(DBG_STARTUP, "lock file exists");
-      delete = 1;
+      deleted = 1;
 
       count = read(fd, str, sizeof(str)-1);
 
@@ -7070,14 +7076,14 @@ static void initCheckLockFile(void)
       {
          pid = atoi(str);
          err = kill(pid, 0);
-         if (!err) delete = 0; /* process still exists */
+         if (!err) deleted = 0; /* process still exists */
          DBG(DBG_STARTUP, "lock file pid=%d err=%d", pid, err);
       }
 
       close(fd);
-      DBG(DBG_STARTUP, "lock file delete=%d", delete);
+      DBG(DBG_STARTUP, "lock file delete=%d", deleted);
 
-      if (delete) unlink(PI_LOCKFILE);
+      if (deleted) unlink(PI_LOCKFILE);
    }
 }
 
@@ -7264,7 +7270,7 @@ static int initZaps
       {
          dmaBus[basePage+n] = (dmaPage_t *) (physical | pi_dram_bus);
 
-         dmaVirt[basePage+n] = mmap
+         dmaVirt[basePage+n] = (dmaPage_t *)mmap
          (
             (void *)pageAdr,
             PAGE_SIZE,
@@ -7291,7 +7297,7 @@ static int initPagemapBlock(int block)
 
    DBG(DBG_STARTUP, "block=%d", block);
 
-   dmaPMapBlk[block] = mmap(
+   dmaPMapBlk[block] = (uintptr_t *)mmap(
        0, (PAGES_PER_BLOCK*PAGE_SIZE),
        PROT_READ|PROT_WRITE,
        MAP_SHARED|MAP_ANONYMOUS|MAP_NORESERVE|MAP_LOCKED,
@@ -7310,7 +7316,7 @@ static int initPagemapBlock(int block)
 
    pageNum = block * PAGES_PER_BLOCK;
 
-   dmaVirt[pageNum] = mmap(
+   dmaVirt[pageNum] = (dmaPage_t *)mmap(
        0, (PAGES_PER_BLOCK*PAGE_SIZE),
        PROT_READ|PROT_WRITE,
        MAP_SHARED|MAP_ANONYMOUS|MAP_NORESERVE|MAP_LOCKED,
@@ -7401,7 +7407,7 @@ static int initAllocDMAMem(void)
 
    /* allocate memory for pointers to virtual and bus memory pages */
 
-   dmaVirt = mmap(
+   dmaVirt = (dmaPage_t**)mmap(
        0, PAGES_PER_BLOCK*(bufferBlocks+PI_WAVE_BLOCKS)*sizeof(dmaPage_t *),
        PROT_READ|PROT_WRITE,
        MAP_PRIVATE|MAP_ANONYMOUS|MAP_LOCKED,
@@ -7410,7 +7416,7 @@ static int initAllocDMAMem(void)
    if (dmaVirt == MAP_FAILED)
       SOFT_ERROR(PI_INIT_FAILED, "mmap dma virtual failed (%m)");
 
-   dmaBus = mmap(
+   dmaBus = (dmaPage_t**)mmap(
        0, PAGES_PER_BLOCK*(bufferBlocks+PI_WAVE_BLOCKS)*sizeof(dmaPage_t *),
        PROT_READ|PROT_WRITE,
        MAP_PRIVATE|MAP_ANONYMOUS|MAP_LOCKED,
@@ -7431,7 +7437,7 @@ static int initAllocDMAMem(void)
    {
       /* pagemap allocation of DMA memory */
 
-      dmaPMapBlk = mmap(
+      dmaPMapBlk = (uintptr_t **)mmap(
           0, (bufferBlocks+PI_WAVE_BLOCKS)*sizeof(dmaPage_t *),
           PROT_READ|PROT_WRITE,
           MAP_PRIVATE|MAP_ANONYMOUS|MAP_LOCKED,
@@ -7464,7 +7470,7 @@ static int initAllocDMAMem(void)
    {
       /* mailbox allocation of DMA memory */
 
-      dmaMboxBlk = mmap(
+      dmaMboxBlk = (DMAMem_t *)mmap(
           0, (bufferBlocks+PI_WAVE_BLOCKS)*sizeof(DMAMem_t),
           PROT_READ|PROT_WRITE,
           MAP_PRIVATE|MAP_ANONYMOUS|MAP_LOCKED,
@@ -7808,19 +7814,19 @@ static void initClearGlobals(void)
    fdMem        = -1;
    fdSock       = -1;
 
-   dmaMboxBlk = MAP_FAILED;
-   dmaPMapBlk = MAP_FAILED;
-   dmaVirt = MAP_FAILED;
-   dmaBus  = MAP_FAILED;
+   dmaMboxBlk = (DMAMem_t *)MAP_FAILED;
+   dmaPMapBlk = (uintptr_t **)MAP_FAILED;
+   dmaVirt = (dmaPage_t **)MAP_FAILED;
+   dmaBus  = (dmaPage_t **)MAP_FAILED;
 
-   auxReg  = MAP_FAILED;
-   clkReg  = MAP_FAILED;
-   dmaReg  = MAP_FAILED;
-   gpioReg = MAP_FAILED;
-   pcmReg  = MAP_FAILED;
-   pwmReg  = MAP_FAILED;
-   systReg = MAP_FAILED;
-   spiReg  = MAP_FAILED;
+   auxReg  = (uint32_t *)MAP_FAILED;
+   clkReg  = (uint32_t *)MAP_FAILED;
+   dmaReg  = (uint32_t *)MAP_FAILED;
+   gpioReg = (uint32_t *)MAP_FAILED;
+   pcmReg  = (uint32_t *)MAP_FAILED;
+   pwmReg  = (uint32_t *)MAP_FAILED;
+   systReg = (uint32_t *)MAP_FAILED;
+   spiReg  = (uint32_t *)MAP_FAILED;
 }
 
 /* ----------------------------------------------------------------------- */
@@ -7888,15 +7894,15 @@ static void initReleaseResources(void)
    if (systReg != MAP_FAILED) munmap((void *)systReg, SYST_LEN);
    if (spiReg  != MAP_FAILED) munmap((void *)spiReg,  SPI_LEN);
 
-   auxReg  = MAP_FAILED;
-   bscsReg = MAP_FAILED;
-   clkReg  = MAP_FAILED;
-   dmaReg  = MAP_FAILED;
-   gpioReg = MAP_FAILED;
-   pcmReg  = MAP_FAILED;
-   pwmReg  = MAP_FAILED;
-   systReg = MAP_FAILED;
-   spiReg  = MAP_FAILED;
+   auxReg  = (uint32_t *)MAP_FAILED;
+   bscsReg = (uint32_t *)MAP_FAILED;
+   clkReg  = (uint32_t *)MAP_FAILED;
+   dmaReg  = (uint32_t *)MAP_FAILED;
+   gpioReg = (uint32_t *)MAP_FAILED;
+   pcmReg  = (uint32_t *)MAP_FAILED;
+   pwmReg  = (uint32_t *)MAP_FAILED;
+   systReg = (uint32_t *)MAP_FAILED;
+   spiReg  = (uint32_t *)MAP_FAILED;
 
    if (dmaBus != MAP_FAILED)
    {
@@ -7904,7 +7910,7 @@ static void initReleaseResources(void)
          PAGES_PER_BLOCK*(bufferBlocks+PI_WAVE_BLOCKS)*sizeof(dmaPage_t *));
    }
 
-   dmaBus = MAP_FAILED;
+   dmaBus = (dmaPage_t **)MAP_FAILED;
 
    if (dmaVirt != MAP_FAILED)
    {
@@ -7917,7 +7923,7 @@ static void initReleaseResources(void)
          PAGES_PER_BLOCK*(bufferBlocks+PI_WAVE_BLOCKS)*sizeof(dmaPage_t *));
    }
 
-   dmaVirt = MAP_FAILED;
+   dmaVirt = (dmaPage_t **)MAP_FAILED;
 
    if (dmaPMapBlk != MAP_FAILED)
    {
@@ -7929,7 +7935,7 @@ static void initReleaseResources(void)
       munmap(dmaPMapBlk, (bufferBlocks+PI_WAVE_BLOCKS)*sizeof(dmaPage_t *));
    }
 
-   dmaPMapBlk = MAP_FAILED;
+   dmaPMapBlk = (uintptr_t **)MAP_FAILED;
 
    if (dmaMboxBlk != MAP_FAILED)
    {
@@ -7945,7 +7951,7 @@ static void initReleaseResources(void)
       munmap(dmaMboxBlk, (bufferBlocks+PI_WAVE_BLOCKS)*sizeof(DMAMem_t));
    }
 
-   dmaMboxBlk = MAP_FAILED;
+   dmaMboxBlk = (DMAMem_t *)MAP_FAILED;
 
    if (inpFifo != NULL)
    {
@@ -8070,7 +8076,6 @@ int initInitialise(void)
    if (initAllocDMAMem() < 0) return PI_INIT_FAILED;
 
    /* done with /dev/mem */
-
    if (fdMem != -1)
    {
       close(fdMem);
@@ -10985,7 +10990,7 @@ int gpioSerialReadOpen(unsigned gpio, unsigned baud, unsigned data_bits)
    wfRx[gpio].mode = PI_WFRX_SERIAL;
    wfRx[gpio].baud = baud;
 
-   wfRx[gpio].s.buf      = malloc(SRX_BUF_SIZE);
+   wfRx[gpio].s.buf      = (char *)malloc(SRX_BUF_SIZE);
    wfRx[gpio].s.bufSize  = SRX_BUF_SIZE;
    wfRx[gpio].s.timeout  = timeout;
    wfRx[gpio].s.fullBit  = bitTime;         /* nanos */
@@ -11140,7 +11145,7 @@ int eventSetFunc(unsigned event, eventFunc_t f)
    if (event > PI_MAX_EVENT)
       SOFT_ERROR(PI_BAD_EVENT_ID, "bad event (%d)", event);
 
-   intEventSetFunc(event, f, 0, NULL);
+   intEventSetFunc(event, (void *)f, 0, NULL);
 
    return 0;
 }
@@ -11158,7 +11163,7 @@ int eventSetFuncEx(unsigned event, eventFuncEx_t f, void *userdata)
    if (event > PI_MAX_EVENT)
       SOFT_ERROR(PI_BAD_EVENT_ID, "bad event (%d)", event);
 
-   intEventSetFunc(event, f, 1, userdata);
+   intEventSetFunc(event, (void *)f, 1, userdata);
 
    return 0;
 }
@@ -11242,7 +11247,7 @@ int gpioSetAlertFunc(unsigned gpio, gpioAlertFunc_t f)
    if (gpio > PI_MAX_USER_GPIO)
       SOFT_ERROR(PI_BAD_USER_GPIO, "bad gpio (%d)", gpio);
 
-   intGpioSetAlertFunc(gpio, f, 0, NULL);
+   intGpioSetAlertFunc(gpio, (void *)f, 0, NULL);
 
    return 0;
 }
@@ -11260,14 +11265,14 @@ int gpioSetAlertFuncEx(unsigned gpio, gpioAlertFuncEx_t f, void *userdata)
    if (gpio > PI_MAX_USER_GPIO)
       SOFT_ERROR(PI_BAD_USER_GPIO, "bad gpio (%d)", gpio);
 
-   intGpioSetAlertFunc(gpio, f, 1, userdata);
+   intGpioSetAlertFunc(gpio, (void *)f, 1, userdata);
 
    return 0;
 }
 
 static void *pthISRThread(void *x)
 {
-   gpioISR_t *isr = x;
+   gpioISR_t *isr = (gpioISR_t *)x;
    int fd;
    int retval;
    uint32_t tick;
@@ -11335,7 +11340,7 @@ static int intGpioSetISRFunc(
 {
    char buf[64];
 
-   char *edge_str[]={"rising\n", "falling\n", "both\n"};
+   const char *edge_str[]={"rising\n", "falling\n", "both\n"};
    int fd;
    int err;
 
@@ -11445,7 +11450,7 @@ int gpioSetISRFunc(
    if (edge > EITHER_EDGE)
       SOFT_ERROR(PI_BAD_EDGE, "bad ISR edge (%d)", edge);
 
-   return intGpioSetISRFunc(gpio, edge, timeout, f, 0, NULL);
+   return intGpioSetISRFunc(gpio, edge, timeout, (void *)f, 0, NULL);
 }
 
 
@@ -11469,7 +11474,7 @@ int gpioSetISRFuncEx(
    if (edge > EITHER_EDGE)
       SOFT_ERROR(PI_BAD_EDGE, "bad ISR edge (%d)", edge);
 
-   return intGpioSetISRFunc(gpio, edge, timeout, f, 1, userdata);
+   return intGpioSetISRFunc(gpio, edge, timeout, (void *)f, 1, userdata);
 }
 
 static void closeOrphanedNotifications(int slot, int fd)
@@ -11880,7 +11885,7 @@ int gpioSetGetSamplesFunc(gpioGetSamplesFunc_t f, uint32_t bits)
 
    gpioGetSamples.ex       = 0;
    gpioGetSamples.userdata = NULL;
-   gpioGetSamples.func     = f;
+   gpioGetSamples.func     = (callbk_t)f;
 
    if (f) gpioGetSamples.bits = bits;
    else   gpioGetSamples.bits = 0;
@@ -11903,7 +11908,7 @@ int gpioSetGetSamplesFuncEx(gpioGetSamplesFuncEx_t f,
 
    gpioGetSamples.ex       = 1;
    gpioGetSamples.userdata = userdata;
-   gpioGetSamples.func     = f;
+   gpioGetSamples.func     = (callbk_t)f;
 
    if (f) gpioGetSamples.bits = bits;
    else   gpioGetSamples.bits = 0;
@@ -11999,7 +12004,7 @@ int gpioSetTimerFunc(unsigned id, unsigned millis, gpioTimerFunc_t f)
    if ((millis < PI_MIN_MS) || (millis > PI_MAX_MS))
       SOFT_ERROR(PI_BAD_MS, "timer %d, bad millis (%d)", id, millis);
 
-   intGpioSetTimerFunc(id, millis, f, 0, NULL);
+   intGpioSetTimerFunc(id, millis, (void *)f, 0, NULL);
 
    return 0;
 }
@@ -12021,7 +12026,7 @@ int gpioSetTimerFuncEx(unsigned id, unsigned millis, gpioTimerFuncEx_t f,
    if ((millis < PI_MIN_MS) || (millis > PI_MAX_MS))
       SOFT_ERROR(PI_BAD_MS, "timer %d, bad millis (%d)", id, millis);
 
-   intGpioSetTimerFunc(id, millis, f, 1, userdata);
+   intGpioSetTimerFunc(id, millis, (void *)f, 1, userdata);
 
    return 0;
 }
@@ -12037,7 +12042,7 @@ pthread_t *gpioStartThread(gpioThreadFunc_t f, void *userdata)
 
    CHECK_INITED_RET_NULL_PTR;
 
-   pth = malloc(sizeof(pthread_t));
+   pth = (pthread_t *)malloc(sizeof(pthread_t));
 
    if (pth)
    {
@@ -12311,7 +12316,7 @@ int gpioSetSignalFunc(unsigned signum, gpioSignalFunc_t f)
    gpioSignal[signum].ex = 0;
    gpioSignal[signum].userdata = NULL;
 
-   gpioSignal[signum].func = f;
+   gpioSignal[signum].func = (callbk_t)f;
 
    return 0;
 }
@@ -12333,7 +12338,7 @@ int gpioSetSignalFuncEx(unsigned signum, gpioSignalFuncEx_t f,
    gpioSignal[signum].ex = 1;
    gpioSignal[signum].userdata = userdata;
 
-   gpioSignal[signum].func = f;
+   gpioSignal[signum].func = (callbk_t)f;
 
    return 0;
 }
@@ -12688,7 +12693,7 @@ int fileApprove(char *filename)
    char match[PI_MAX_PATH];
    char buffer[PI_MAX_PATH];
    char line[PI_MAX_PATH];
-   char mperm;
+   char mperm=0;
    char perm;
    char term;
    FILE *f;
@@ -13453,3 +13458,4 @@ int gpioCfgInternals(unsigned cfgWhat, unsigned cfgVal)
 
 #include "custom.cext"
 
+} // namespace

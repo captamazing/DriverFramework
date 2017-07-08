@@ -35,8 +35,10 @@ This version is for pigpio version 57+
 #include <stdlib.h>
 #include <ctype.h>
 
-#include "pigpio.h"
-#include "command.h"
+#include "pigpio.hpp"
+#include "command.hpp"
+
+namespace PIGPIO {
 
 cmdInfo_t cmdInfo[]=
 {
@@ -260,7 +262,7 @@ cmdInfo_t cmdInfo[]=
 };
 
 
-char * cmdUsage = "\n\
+const char * cmdUsage = "\n\
 BC1 bits         Clear GPIO in bank 1\n\
 BC2 bits         Clear GPIO in bank 2\n\
 BI2CC sda        Close bit bang I2C\n\
@@ -412,7 +414,7 @@ man pigs for full details.\n\
 typedef struct
 {
    int error;
-   char * str;
+   const char * str;
 } errInfo_t;
 
 static errInfo_t errInfo[]=
@@ -563,8 +565,8 @@ static errInfo_t errInfo[]=
 
 };
 
-static char * fmtMdeStr="RW540123";
-static char * fmtPudStr="ODU";
+static const char * fmtMdeStr="RW540123";
+static const char * fmtPudStr="ODU";
 
 static int cmdMatch(char *str)
 {
@@ -803,7 +805,7 @@ int cmdParse(
          {
             ctl->eaten += n;
             val = toupper(c);
-            p8 = strchr(fmtMdeStr, val);
+            p8 = const_cast<char *>(strchr(fmtMdeStr, val));
 
             if (p8 != NULL)
             {
@@ -827,7 +829,7 @@ int cmdParse(
          {
             ctl->eaten += n;
             val = toupper(c);
-            p8 = strchr(fmtPudStr, val);
+            p8 = const_cast<char *>(strchr(fmtPudStr, val));
             if (p8 != NULL)
             {
                val = p8 - fmtPudStr;
@@ -1242,7 +1244,7 @@ int cmdParse(
    if (valid) return idx; else return CMD_BAD_PARAMETER;
 }
 
-char * cmdErrStr(int error)
+const char * cmdErrStr(int error)
 {
    int i;
 
@@ -1275,7 +1277,7 @@ int cmdParseScript(char *script, cmdScript_t *s, int diags)
    b = (sizeof(int) * (PI_MAX_SCRIPT_PARAMS + PI_MAX_SCRIPT_VARS)) +
        (sizeof(cmdInstr_t) * (len + 2) / 2) + len;
 
-   s->par = calloc(1, b);
+   s->par = (int *)calloc(1, b);
 
    if (s->par == NULL) return -1;
 
@@ -1401,3 +1403,4 @@ int cmdParseScript(char *script, cmdScript_t *s, int diags)
    return status;
 }
 
+} // Namespace PIGPIO

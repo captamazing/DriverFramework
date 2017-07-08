@@ -31,6 +31,8 @@ For more information, please refer to <http://unlicense.org/>
 #include <stdint.h>
 #include <pthread.h>
 
+namespace PIGPIO {
+
 #define PIGPIO_VERSION 64
 #define EMBEDDED_IN_VM // Don't want PIGPIO setting up sig handlers or debug output
 
@@ -6352,6 +6354,9 @@ after this command is issued.
 #define PI_DEFAULT_CFG_INTERNALS           0
 
 /*DEF_E*/
+
+
+} // namespace PIGPIO
 
 #endif
 

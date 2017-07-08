@@ -35,7 +35,9 @@ This version is for pigpio version 57+
 #include <stdio.h>
 #include <string.h>
 
-#include "pigpio.h"
+#include "pigpio.hpp"
+
+namespace PIGPIO {
 
 #define CMD_MAX_PARAM 512
 #define CMD_MAX_EXTENSION (1<<16)
@@ -73,7 +75,7 @@ typedef struct
 typedef struct
 {
    int   cmd;  /* command number            */
-   char *name; /* command name              */
+   const char *name; /* command name              */
    int   vt;   /* command verification type */
    int   rv;   /* command return value type */
 } cmdInfo_t;
@@ -108,15 +110,16 @@ typedef struct
 
 extern cmdInfo_t cmdInfo[];
 
-extern char *cmdUsage;
+extern const char *cmdUsage;
 
 int cmdParse(char *buf, uint32_t *p, unsigned ext_len, char *ext, cmdCtlParse_t *ctl);
 
 int cmdParseScript(char *script, cmdScript_t *s, int diags);
 
-char *cmdErrStr(int error);
+const char *cmdErrStr(int error);
 
 char *cmdStr(void);
 
+} // Namespace PIGPIO
 #endif
 

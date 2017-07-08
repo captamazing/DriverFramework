@@ -5,7 +5,7 @@ If you want customised functions replace this file with your own
 definitions for gpioCustom1 and gpioCustom2.
 */
 
-#include "pigpio.h"
+#include "pigpio.hpp"
 
 int gpioCustom1(unsigned arg1, unsigned arg2, char *argx, unsigned count)
 {

@@ -10,8 +10,8 @@ include_directories(../../framework/include)
 
 get_filename_component(drivername ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 df_add_library(df_${drivername}
-	pigpio.c
-	command.c
+	pigpio.cpp
+	command.cpp
 	)
 
 target_link_libraries(df_${drivername}
