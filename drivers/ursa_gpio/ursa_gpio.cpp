@@ -139,9 +139,9 @@ int GPIO_TIMED::devWrite(const void *buf, size_t count){
     gpio_write_t* writeStruct;
     writeStruct=(gpio_write_t*) buf;
     if (writeStruct->type==GPIO_CALLBACK){
-        PIGPIO::gpioSetAlertFuncEx(writeStruct->value,callbackWrapper, &writeStruct->callback);
+        PIGPIO::gpioSetAlertFuncEx(writeStruct->gpio,callbackWrapper, &writeStruct->callback);
     } else if (writeStruct->type==GPIO_WRITE){
-        //
+        PIGPIO::gpioWrite(writeStruct->gpio,writeStruct->value);
     }
     return 1;
 }

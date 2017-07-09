@@ -39,7 +39,7 @@ namespace DriverFramework
 #define BLOCK_SIZE          (4*1024)
 
 #define GPIO_PIN_COUNT 32
-#define GPIO_SAMPLE_US 10
+#define GPIO_SAMPLE_US 5
 #define GPIO_MEASURE_FREQ 1
 #define GPIO_CALLBACK 1
 #define GPIO_WRITE 2
@@ -58,7 +58,8 @@ enum state_t{
 //Callback registration struct
 typedef struct {
     std::function<void(int, int, uint32_t)> callback;
-    uint32_t value; // Either the pin or a level 0/1
+    uint32_t gpio; // The pin
+    uint32_t value; // 1 - high, 0 - low
     uint32_t type;
 } gpio_write_t;
 
