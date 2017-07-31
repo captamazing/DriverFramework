@@ -4,7 +4,7 @@
 #include <math.h>
 #include "DriverFramework.hpp"
 #include "PCA9685.hpp"
-#include "../common/common.hpp"
+#include <DevMgr.hpp>
 
 namespace DriverFramework
 {
@@ -30,18 +30,27 @@ int PCA9685::start() {
     /* Set the initial frequency */
     _setFrequency(PCA9685_FREQUENCY_PWM);
 
-    // Output enable - active low (use Linux filesystem to write)
-    m_enableGPIO->enable();
-    m_enableGPIO->setDirection(GPIO::OUTPUT);
-    m_enableGPIO->setValue(GPIO::LOW);
+    // Get a handle to our GPIO interface for OE_L
+    DevHandle h;
+    DevMgr::getHandle(GPIO_DEV_PATH, h); 
+    if (!h.isValid()) {
+        DF_LOG_ERR("Failed to get handle to GPIO device");
+        result = -1;
+    } else {
+        // Pull OE low so we have output on out PWM pins
+        writeStruct.gpio=PCA9685_ENABLE_PIN;
+        writeStruct.type=GPIO_WRITE;
+        writeStruct.value=0;
+        h.write((void*)&writeStruct,sizeof(gpio_write_t));
+    }
+
+    // Don't need this handle anymore
+    DevMgr::releaseHandle(h);
 
     return 0;
 }
 
 int PCA9685::stop(){
-    if (m_enableGPIO != nullptr) {
-        m_enableGPIO->disable();
-    }    
     return 0;
 }
 

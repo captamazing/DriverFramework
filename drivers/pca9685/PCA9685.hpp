@@ -37,7 +37,7 @@
 #include <unistd.h>
 #include "DriverFramework.hpp"
 #include "I2CDevObj.hpp"
-#include "../common/common.hpp"
+#include "../ursa_gpio/ursa_gpio.hpp"
 
 
 #define PWM_CLASS_PATH  "/dev/pwm"
@@ -89,8 +89,7 @@ class PCA9685 : public I2CDevObj
 public:
     PCA9685() :
         I2CDevObj("PWM", PWM_DEVICE_PATH, PWM_CLASS_PATH, 0),
-        m_armed(false),
-        m_enableGPIO(new GPIO(PCA9685_ENABLE_PIN))
+        m_armed(false)
     {
         m_osc_clock = PCA9685_EXTERNAL_CLOCK;
         m_pulses_buffer = new uint16_t[PCA9685_CHAN_COUNT - PCA9685_CHAN_OFFSET];
@@ -98,11 +97,6 @@ public:
         m_id.dev_id_s.address = PCA9685_SLAVE_ADDRESS;
     }
     ~PCA9685(){
-        if (m_enableGPIO != nullptr) {
-            m_enableGPIO->disable();
-            delete m_enableGPIO;
-        }
-        delete m_enableGPIO;
         delete [] m_pulses_buffer;
     }
 
@@ -128,7 +122,7 @@ private:
     uint16_t        m_pending_write_mask;
     bool            m_armed;
     uint16_t*       m_pulses_buffer;
-    GPIO*           m_enableGPIO;
+    gpio_write_t writeStruct;
 };
 
 } // namespace DriverFramework
